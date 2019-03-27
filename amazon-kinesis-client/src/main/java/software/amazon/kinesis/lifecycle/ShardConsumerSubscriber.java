@@ -1,16 +1,16 @@
 /*
- *  Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
- *  Licensed under the Amazon Software License (the "License").
- *  You may not use this file except in compliance with the License.
- *  A copy of the License is located at
+ * Licensed under the Amazon Software License (the "License").
+ * You may not use this file except in compliance with the License.
+ * A copy of the License is located at
  *
- *  http://aws.amazon.com/asl/
+ * http://aws.amazon.com/asl/
  *
- *  or in the "license" file accompanying this file. This file is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- *  express or implied. See the License for the specific language governing
- *  permissions and limitations under the License.
+ * or in the "license" file accompanying this file. This file is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+ * express or implied. See the License for the specific language governing
+ * permissions and limitations under the License.
  */
 package software.amazon.kinesis.lifecycle;
 
@@ -42,7 +42,7 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     private final int bufferSize;
     private final ShardConsumer shardConsumer;
     private final int readTimeoutsToIgnoreBeforeWarning;
-    private volatile int readTimeoutSinceLastRead=0;
+    private volatile int readTimeoutSinceLastRead = 0;
 
     @VisibleForTesting
     final Object lockObject = new Object();
@@ -58,13 +58,14 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
     private volatile Throwable retrievalFailure;
 
     ShardConsumerSubscriber(RecordsPublisher recordsPublisher, ExecutorService executorService, int bufferSize,
-                            ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
+            ShardConsumer shardConsumer, int readTimeoutsToIgnoreBeforeWarning) {
         this.recordsPublisher = recordsPublisher;
         this.scheduler = Schedulers.from(executorService);
         this.bufferSize = bufferSize;
         this.shardConsumer = shardConsumer;
-        this.readTimeoutsToIgnoreBeforeWarning=readTimeoutsToIgnoreBeforeWarning;
+        this.readTimeoutsToIgnoreBeforeWarning = readTimeoutsToIgnoreBeforeWarning;
     }
+
 
     void startSubscriptions() {
         synchronized (lockObject) {
@@ -96,7 +97,8 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
         Throwable oldFailure = null;
         if (retrievalFailure != null) {
             synchronized (lockObject) {
-                String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests", shardConsumer.shardInfo().shardId());
+                String logMessage = String.format("%s: Failure occurred in retrieval.  Restarting data requests",
+                        shardConsumer.shardInfo().shardId());
                 if (retrievalFailure instanceof RetryableRetrievalException) {
                     log.debug(logMessage, retrievalFailure.getCause());
                 } else {
@@ -162,33 +164,40 @@ class ShardConsumerSubscriber implements Subscriber<RecordsRetrieved> {
             }
         }
 
-        readTimeoutSinceLastRead=0;
+        readTimeoutSinceLastRead = 0;
     }
 
     @Override
     public void onError(Throwable t) {
         synchronized (lockObject) {
-            if(t instanceof RetryableRetrievalException &&
-            t.getMessage().contains("ReadTimeout")){
+            if (t instanceof RetryableRetrievalException && t.getMessage().contains("ReadTimeout")) {
                 readTimeoutSinceLastRead++;
-                if(readTimeoutSinceLastRead > readTimeoutsToIgnoreBeforeWarning){
-                    log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will" +
-                                    " recreate the subscription as neccessary to continue processing. If you " +
-                                    "are seeing this warning frequently consider increasing the SDK timeouts " +
-                                    "by providing an OverrideConfiguration to the kinesis client. Alternatively you" +
-                                    "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress" +
-                                    "intermittant ReadTimeout warnings.",
-                            shardConsumer.shardInfo().shardId(), t);
+                if (readTimeoutSinceLastRead > readTimeoutsToIgnoreBeforeWarning) {
+                    logOnErrorReadTimeoutWarning(t);
                 }
-            }else{
-                log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will " +
-                                "recreate the subscription as neccessary to continue processing.",
-                        shardConsumer.shardInfo().shardId(), t);
+            } else {
+                logOnErrorWarning(t);
             }
 
             subscription.cancel();
             retrievalFailure = t;
         }
+    }
+
+    protected void logOnErrorWarning(Throwable t) {
+        log.warn(
+                "{}: onError().  Cancelling subscription, and marking self as failed. KCL will "
+                        + "recreate the subscription as neccessary to continue processing.",
+                shardConsumer.shardInfo().shardId(), t);
+    }
+
+    protected void logOnErrorReadTimeoutWarning(Throwable t) {
+        log.warn("{}: onError().  Cancelling subscription, and marking self as failed. KCL will"
+                + " recreate the subscription as neccessary to continue processing. If you "
+                + "are seeing this warning frequently consider increasing the SDK timeouts "
+                + "by providing an OverrideConfiguration to the kinesis client. Alternatively you"
+                + "can configure LifecycleConfig.readTimeoutsToIgnoreBeforeWarning to suppress"
+                + "intermittant ReadTimeout warnings.", shardConsumer.shardInfo().shardId(), t);
     }
 
     @Override
